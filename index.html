@@ -139,7 +139,7 @@ mCont.addEventListener('touchmove',e=>{
   if(touch.edge==='w'){ dx=Math.min(dx,sel.w-min); sel.x+=dx; sel.w-=dx; }
   sel.x=Math.max(0,Math.min(sel.x,img.w-sel.w)); sel.y=Math.max(0,Math.min(sel.y,img.h-sel.h));
   sel.w=Math.max(min,Math.min(sel.w,img.w-sel.x)); sel.h=Math.max(min,Math.min(sel.h,img.h-sel.y));
-
+###
   if(isAutoZoom) {
     const maxPixelSize = 40; 
     let s = Math.min(mr.width / sel.w, mr.height / sel.h);
@@ -160,6 +160,7 @@ mCont.addEventListener('touchmove',e=>{
 
     view.scale = targetScale;
   }
+  ###
  }
  touch.lastX=t[0].pageX; touch.lastY=t[0].pageY;
  update();
