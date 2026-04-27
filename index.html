@@ -138,6 +138,9 @@ mCont.addEventListener('touchmove',e=>{
   sel.x=Math.max(0,Math.min(sel.x,img.w-sel.w)); sel.y=Math.max(0,Math.min(sel.y,img.h-sel.h));
   sel.w=Math.max(min,Math.min(sel.w,img.w-sel.x)); sel.h=Math.max(min,Math.min(sel.h,img.h-sel.y));
 
+
+
+  /*
   if(isAutoZoom) {
     const maxPixelSize = 40; 
     let s = Math.min(mr.width / sel.w, mr.height / sel.h);
@@ -158,6 +161,51 @@ mCont.addEventListener('touchmove',e=>{
 
     view.scale = targetScale;
   }
+*/
+
+
+
+
+
+  mCont.addEventListener('touchend',()=>{
+ mCont.classList.remove('dragging');
+
+ if(touch.mode==='edit'){
+  sel.x=Math.round(sel.x);
+  sel.y=Math.round(sel.y);
+  sel.w=Math.round(sel.w);
+  sel.h=Math.round(sel.h);
+
+  // ★ここにオートズーム発動を追加
+  if(isAutoZoom){
+    const mr = mCont.getBoundingClientRect();
+    const maxPixelSize = 40;
+
+    let s = Math.min(mr.width / sel.w, mr.height / sel.h);
+    const minS = Math.min(mr.width / img.w, mr.height / img.h);
+    let targetScale = Math.min(Math.max(s, minS), maxPixelSize);
+
+    const idealX = (mr.width / 2) - (sel.x + sel.w / 2) * targetScale;
+    const idealY = (mr.height / 2) - (sel.y + sel.h / 2) * targetScale;
+    const curW = img.w * targetScale, curH = img.h * targetScale;
+
+    if (curW > mr.width) view.x = Math.min(0, Math.max(idealX, mr.width - curW));
+    else view.x = (mr.width - curW) / 2;
+
+    if (curH > mr.height) view.y = Math.min(0, Math.max(idealY, mr.height - curH));
+    else view.y = (mr.height - curH) / 2;
+
+    view.scale = targetScale;
+  }
+ }
+
+ touch.mode='';
+ update();
+});
+
+
+
+  
  }
  touch.lastX=t[0].pageX; touch.lastY=t[0].pageY;
  update();
