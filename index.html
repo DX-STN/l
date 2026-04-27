@@ -176,7 +176,31 @@ mCont.addEventListener('touchmove',e=>{
   sel.w=Math.round(sel.w);
   sel.h=Math.round(sel.h);
 
-  // ★ここにオートズーム発動を追加
+  
+
+
+
+  
+ }
+ touch.lastX=t[0].pageX; touch.lastY=t[0].pageY;
+ update();
+},{passive:false});
+
+mCont.addEventListener('touchend',()=>{
+ mCont.classList.remove('dragging');
+ /*
+ if(touch.mode==='edit'){
+  sel.x=Math.round(sel.x); sel.y=Math.round(sel.y); sel.w=Math.round(sel.w); sel.h=Math.round(sel.h); 
+ */
+
+
+
+if(touch.mode==='edit'){
+  sel.x=Math.round(sel.x);
+  sel.y=Math.round(sel.y);
+  sel.w=Math.round(sel.w);
+  sel.h=Math.round(sel.h);
+
   if(isAutoZoom){
     const mr = mCont.getBoundingClientRect();
     const maxPixelSize = 40;
@@ -197,23 +221,12 @@ mCont.addEventListener('touchmove',e=>{
 
     view.scale = targetScale;
   }
- }
-
- touch.mode='';
- update();
-});
-
-
-
+}
   
+ 
+ /*
  }
- touch.lastX=t[0].pageX; touch.lastY=t[0].pageY;
- update();
-},{passive:false});
-
-mCont.addEventListener('touchend',()=>{
- mCont.classList.remove('dragging');
- if(touch.mode==='edit'){ sel.x=Math.round(sel.x); sel.y=Math.round(sel.y); sel.w=Math.round(sel.w); sel.h=Math.round(sel.h); }
+ */
  touch.mode=''; update();
 });
 
