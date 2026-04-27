@@ -168,7 +168,14 @@ mCont.addEventListener('touchmove',e=>{
 
 mCont.addEventListener('touchend',()=>{
  mCont.classList.remove('dragging');
- if(touch.mode==='edit'){ sel.x=Math.round(sel.x); sel.y=Math.round(sel.y); sel.w=Math.round(sel.w); sel.h=Math.round(sel.h); }
+
+ /*
+ if(touch.mode==='edit'){
+ sel.x=Math.round(sel.x); sel.y=Math.round(sel.y); sel.w=Math.round(sel.w); sel.h=Math.round(sel.h);
+ }
+*/
+
+ 
  touch.mode=''; update();
 
 
@@ -178,7 +185,7 @@ mCont.addEventListener('touchend',()=>{
 function update() {
   if (!img.isLoaded) return;
   const mr = mCont.getBoundingClientRect();
-  statsDiv.innerText = `倍率: ${view.scale.toFixed(2)}倍 / 1px幅: ${view.scale.toFixed(1)} px`;
+  statsDiv.innerText = `倍率: ${view.scale.toFixed(2)}倍 */ 1px幅: ${view.scale.toFixed(1)} px`;
   mainImg.style.transform = `translate(${view.x}px,${view.y}px) scale(${view.scale})`;
   const L = view.x + sel.x * view.scale, T = view.y + sel.y * view.scale;
   const W = sel.w * view.scale, H = sel.h * view.scale;
