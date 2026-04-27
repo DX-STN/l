@@ -169,6 +169,9 @@ mCont.addEventListener('touchend',()=>{
  mCont.classList.remove('dragging');
  if(touch.mode==='edit'){ sel.x=Math.round(sel.x); sel.y=Math.round(sel.y); sel.w=Math.round(sel.w); sel.h=Math.round(sel.h); }
  touch.mode=''; update();
+
+
+ 
 });
 
 function update() {
