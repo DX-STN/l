@@ -157,10 +157,15 @@ mCont.addEventListener('touchmove',e=>{
     else view.y = (mr.height - curH) / 2;
 
     view.scale = targetScale;
+
+
+
+   applyAutoZoom();
+   
   }
-  
+  /*
   applyAutoZoom();
-  
+  */
  }
  touch.lastX=t[0].pageX; touch.lastY=t[0].pageY;
  update();
