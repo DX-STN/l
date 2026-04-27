@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>SYNC TEST MODE - Dynamic Anchor Fixed</title>
+<style>
+body { margin:0; background:#111; overflow:hidden; display:flex; flex-direction:column; align-items:center; font-family: sans-serif; }
+.canvas { width:90vw; margin:10px 0; background:#222; position:relative; overflow:hidden; touch-action:none; }
+#nav-container { height:20vh; }
+#main-container { height:45vh; background:#333; }
+#main-img,#nav-img { position:absolute; top:0; left:0; transform-origin:0 0; pointer-events:none; display:none; image-rendering:pixelated; }
+.crop-box { position:absolute; border:2px solid #4da3ff; box-sizing:border-box; pointer-events:none; display:none; z-index: 2; }
+.nav-box { position:absolute; border:2px solid #4da3ff; box-sizing:border-box; pointer-events:none; display:none; z-index: 3; }
+.handle { position:absolute; pointer-events:auto; }
+#file-input { margin: 10px; color: white; }
+
+.ui-row { display: flex; align-items: center; justify-content: center; gap: 10px; width: 95vw; padding: 5px; }
+.stats { color: #4da3ff; font-size: 14px; background: rgba(255,255,255,0.1); padding: 5px 15px; border-radius: 20px; border: 1px solid #4da3ff; white-space: nowrap; }
+#toggle-az { padding:10px 20px; background:#4da3ff; color:white; border:none; border-radius:5px; font-weight:bold; cursor:pointer; font-size: 13px; white-space: nowrap; }
+
+#main-img, .crop-box, .handle { transition: transform 0.3s ease-out, left 0.3s ease-out, top 0.3s ease-out, width 0.3s ease-out, height 0.3s ease-out; }
+.dragging #main-img, .dragging .crop-box, .dragging .handle { transition: none !important; }
+</style>
+</head>
+<body>
+
+<div id="nav-container" class="canvas">
+ <img id="nav-img">
+ <div id="nav-box" class="nav-box"></div>
+</div>
+
+<div class="ui-row">
+  <button id="toggle-az">オートズーム: ON</button>
+  <div id="stats" class="stats">倍率: --- / 1px幅: --- px</div>
+</div>
+
+<div id="main-container" class="canvas">
+ <img id="main-img">
+ <div id="crop-box" class="crop-box"></div>
+ <div id="hn_o" class="handle" data-edge="n"></div><div id="hs_o" class="handle" data-edge="s"></div>
+ <div id="he_o" class="handle" data-edge="e"></div><div id="hw_o" class="handle" data-edge="w"></div>
+ <div id="hn_i" class="handle" data-edge="n"></div><div id="hs_i" class="handle" data-edge="s"></div>
+ <div id="he_i" class="handle" data-edge="e"></div><div id="hw_i" class="handle" data-edge="w"></div>
+</div>
+
+<input type="file" id="file-input" accept="image/*">
+
+<script>
+const navImg = document.getElementById('nav-img'), mainImg = document.getElementById('main-img');
+const navBox = document.getElementById('nav-box'), cropBox = document.getElementById('crop-box');
+const mCont = document.getElementById('main-container'), nCont = document.getElementById('nav-container');
+const fileInput = document.getElementById('file-input'), btnToggle = document.getElementById('toggle-az'), statsDiv = document.getElementById('stats');
+
+let img={w:0,h:0,isLoaded:false}, view={x:0,y:0,scale:1}, sel={x:0,y:0,w:0,h:0};
+let touch={mode:'',lastX:0,lastY:0,lastDist:0,lastScale:1,edge:''}, isAutoZoom = true;
+
+btnToggle.onclick = () => {
+  isAutoZoom = !isAutoZoom;
+  btnToggle.innerText = `オートズーム: ${isAutoZoom ? 'ON' : 'OFF'}`;
+  btnToggle.style.background = isAutoZoom ? '#4da3ff' : '#666';
+  update();
+};
+
+fileInput.onchange = e=>{
+ const f=e.target.files[0]; if(!f)return;
+ const r=new FileReader();
+ r.onload=ev=>{
+  navImg.src=mainImg.src=ev.target.result;
+  mainImg.onload=()=>{
+   img.w=mainImg.naturalWidth; img.h=mainImg.naturalHeight; img.isLoaded=true;
+   sel={x:0,y:0,w:img.w,h:img.h};
+   const mr = mCont.getBoundingClientRect();
+   view.scale = Math.min(mr.width/img.w, mr.height/img.h);
+   view.x = (mr.width - img.w*view.scale)/2;
+   view.y = (mr.height - img.h*view.scale)/2;
+   mainImg.style.display=navImg.style.display=cropBox.style.display=navBox.style.display='block';
+   update();
+  };
+ };
+ r.readAsDataURL(f);
+};
+
+mCont.addEventListener('touchstart',e=>{
+ if(!img.isLoaded)return;
+ const t=e.touches;
+ mCont.classList.add('dragging');
+ if(t.length===2){
+  touch.mode='zoom';
+  touch.lastDist = Math.hypot(t[0].pageX - t[1].pageX, t[0].pageY - t[1].pageY);
+  touch.lastScale = view.scale;
+ }else{
+  touch.mode = e.target.classList.contains('handle') ? 'edit' : 'scroll';
+  if(touch.mode==='edit') touch.edge=e.target.dataset.edge;
+  touch.lastX=t[0].pageX; touch.lastY=t[0].pageY;
+ }
+},{passive:false});
+
+mCont.addEventListener('touchmove',e=>{
+ if(!touch.mode)return; e.preventDefault();
+ const t=e.touches; const mr = mCont.getBoundingClientRect();
+ 
+ if(touch.mode==='zoom' && t.length===2){
+  const dist = Math.hypot(t[0].pageX - t[1].pageX, t[0].pageY - t[1].pageY);
+  let newScale = touch.lastScale * (dist / touch.lastDist);
+  const minScale = Math.min(mr.width / img.w, mr.height / img.h);
+  if(newScale < minScale) newScale = minScale;
+
+  const cx = mr.width/2, cy = mr.height/2;
+  let nextX = cx - (cx - view.x) * (newScale / view.scale);
+  let nextY = cy - (cy - view.y) * (newScale / view.scale);
+
+  const curW = img.w * newScale, curH = img.h * newScale;
+  if (curW > mr.width) nextX = Math.min(0, Math.max(nextX, mr.width - curW));
+  else nextX = (mr.width - curW) / 2;
+  if (curH > mr.height) nextY = Math.min(0, Math.max(nextY, mr.height - curH));
+  else nextY = (mr.height - curH) / 2;
+
+  view.x = nextX; view.y = nextY; view.scale = newScale;
+
+ } else if(touch.mode==='scroll'){
+  let nextX = view.x + (t[0].pageX - touch.lastX);
+  let nextY = view.y + (t[0].pageY - touch.lastY);
+  const curW = img.w * view.scale, curH = img.h * view.scale;
+  if (curW > mr.width) nextX = Math.min(0, Math.max(nextX, mr.width - curW));
+  else nextX = (mr.width - curW) / 2;
+  if (curH > mr.height) nextY = Math.min(0, Math.max(nextY, mr.height - curH));
+  else nextY = (mr.height - curH) / 2;
+  view.x = nextX; view.y = nextY;
+
+ } else if(touch.mode==='edit'){
+  let dx=(t[0].pageX-touch.lastX)/view.scale, dy=(t[0].pageY-touch.lastY)/view.scale;
+  const min=1;
+  if(touch.edge==='n'){ dy=Math.min(dy,sel.h-min); sel.y+=dy; sel.h-=dy; }
+  if(touch.edge==='s'){ sel.h=Math.max(min,sel.h+dy); }
+  if(touch.edge==='e'){ sel.w=Math.max(min,sel.w+dx); }
+  if(touch.edge==='w'){ dx=Math.min(dx,sel.w-min); sel.x+=dx; sel.w-=dx; }
+  sel.x=Math.max(0,Math.min(sel.x,img.w-sel.w)); sel.y=Math.max(0,Math.min(sel.y,img.h-sel.h));
+  sel.w=Math.max(min,Math.min(sel.w,img.w-sel.x)); sel.h=Math.max(min,Math.min(sel.h,img.h-sel.y));
+
+  if(isAutoZoom) {
+    const maxPixelSize = 40; 
+    let s = Math.min(mr.width / sel.w, mr.height / sel.h);
+    const minS = Math.min(mr.width / img.w, mr.height / img.h);
+    let targetScale = Math.min(Math.max(s, minS), maxPixelSize);
+
+    // 【重要】理想座標を算出し、空白を作らないようにクランプ。
+    // これにより、端が近い場合はそこがロック支点となり、中央に寄れる場合は寄る挙動になる。
+    const idealX = (mr.width / 2) - (sel.x + sel.w / 2) * targetScale;
+    const idealY = (mr.height / 2) - (sel.y + sel.h / 2) * targetScale;
+    const curW = img.w * targetScale, curH = img.h * targetScale;
+
+    if (curW > mr.width) view.x = Math.min(0, Math.max(idealX, mr.width - curW));
+    else view.x = (mr.width - curW) / 2;
+
+    if (curH > mr.height) view.y = Math.min(0, Math.max(idealY, mr.height - curH));
+    else view.y = (mr.height - curH) / 2;
+
+    view.scale = targetScale;
+  }
+ }
+ touch.lastX=t[0].pageX; touch.lastY=t[0].pageY;
+ update();
+},{passive:false});
+
+mCont.addEventListener('touchend',()=>{
+ mCont.classList.remove('dragging');
+ if(touch.mode==='edit'){ sel.x=Math.round(sel.x); sel.y=Math.round(sel.y); sel.w=Math.round(sel.w); sel.h=Math.round(sel.h); }
+ touch.mode=''; update();
+});
+
+function update() {
+  if (!img.isLoaded) return;
+  const mr = mCont.getBoundingClientRect();
+  statsDiv.innerText = `倍率: ${view.scale.toFixed(2)}倍 / 1px幅: ${view.scale.toFixed(1)} px`;
+  mainImg.style.transform = `translate(${view.x}px,${view.y}px) scale(${view.scale})`;
+  const L = view.x + sel.x * view.scale, T = view.y + sel.y * view.scale;
+  const W = sel.w * view.scale, H = sel.h * view.scale;
+  cropBox.style.left = L+'px'; cropBox.style.top = T+'px'; cropBox.style.width = W+'px'; cropBox.style.height = H+'px';
+  
+  const pad = 50, dPW = Math.min(pad, W), dPH = Math.min(pad, H), isHL = sel.w > sel.h;
+  ['n', 's', 'e', 'w'].forEach(edge => {
+    const o = document.getElementById(`h${edge}_o`), i = document.getElementById(`h${edge}_i`);
+    const b = (edge === 'n' ? T : (edge === 's' ? T + H : (edge === 'w' ? L : L + W)));
+    if (edge === 'n' || edge === 's') {
+      o.style.width = W + 'px'; o.style.left = L + 'px'; o.style.top = (edge === 'n' ? b - pad : b) + 'px'; o.style.height = pad + 'px';
+      i.style.width = W + 'px'; i.style.left = L + 'px'; i.style.top = (edge === 'n' ? b : b - dPH) + 'px'; i.style.height = dPH + 'px';
+    } else {
+      o.style.height = H + 'px'; o.style.top = T + 'px'; o.style.left = (edge === 'w' ? b - pad : b) + 'px'; o.style.width = pad + 'px';
+      i.style.height = H + 'px'; i.style.top = T + 'px'; i.style.left = (edge === 'w' ? b : b - dPW) + 'px'; i.style.width = dPW + 'px';
+    }
+    o.style.zIndex = 20; i.style.zIndex = isHL ? ((edge === 'e' || edge === 'w') ? 10 : 5) : ((edge === 'n' || edge === 's') ? 10 : 5);
+  });
+  
+  const nr = nCont.getBoundingClientRect(); const ns = Math.min(nr.width / img.w, nr.height / img.h);
+  const nx = (nr.width - img.w * ns) / 2, ny = (nr.height - img.h * ns) / 2;
+  navImg.style.transform = `translate(${nx}px,${ny}px) scale(${ns})`;
+  navBox.style.left = (nx + sel.x * ns) + 'px'; navBox.style.top = (ny + sel.y * ns) + 'px';
+  navBox.style.width = (sel.w * ns) + 'px'; navBox.style.height = (sel.h * ns) + 'px';
+  
+  let vBox = document.getElementById('view-box');
+  if (!vBox) {
+    vBox = document.createElement('div'); vBox.id = 'view-box';
+    vBox.style.cssText = 'position:absolute;pointer-events:none;box-shadow:0 0 0 4000px rgba(77,163,255,0.3);z-index:4;';
+    nCont.appendChild(vBox);
+  }
+  const vL = -view.x/view.scale, vT = -view.y/view.scale, vW = mr.width/view.scale, vH = mr.height/view.scale;
+  vBox.style.left = (nx + vL * ns) + 'px'; vBox.style.top = (ny + vT * ns) + 'px';
+  vBox.style.width = (vW * ns) + 'px'; vBox.style.height = (vH * ns) + 'px';
+}
+</script>
+</body>
+</html>
