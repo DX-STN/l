@@ -208,6 +208,36 @@ function update() {
   vBox.style.left = (nx + vL * ns) + 'px'; vBox.style.top = (ny + vT * ns) + 'px';
   vBox.style.width = (vW * ns) + 'px'; vBox.style.height = (vH * ns) + 'px';
 }
+
+
+
+
+ 
+
+
+function applyAutoZoom() {
+  if(!isAutoZoom) return;
+
+  const mr = mCont.getBoundingClientRect();
+  const maxPixelSize = 40;
+
+  let s = Math.min(mr.width / sel.w, mr.height / sel.h);
+  const minS = Math.min(mr.width / img.w, mr.height / img.h);
+  let targetScale = Math.min(Math.max(s, minS), maxPixelSize);
+
+  const idealX = (mr.width / 2) - (sel.x + sel.w / 2) * targetScale;
+  const idealY = (mr.height / 2) - (sel.y + sel.h / 2) * targetScale;
+  const curW = img.w * targetScale, curH = img.h * targetScale;
+
+  if (curW > mr.width) view.x = Math.min(0, Math.max(idealX, mr.width - curW));
+  else view.x = (mr.width - curW) / 2;
+
+  if (curH > mr.height) view.y = Math.min(0, Math.max(idealY, mr.height - curH));
+  else view.y = (mr.height - curH) / 2;
+
+  view.scale = targetScale;
+}
+ 
 </script>
 </body>
 </html>
