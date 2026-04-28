@@ -251,7 +251,7 @@ fileInput.onchange = e=>{
  r.readAsDataURL(f);
 };
 
-function applyAutoZoom(){
+function handleAutoZoom(){
  if(!isAutoZoom) return;
 
  const mr = mCont.getBoundingClientRect();
@@ -344,9 +344,8 @@ mCont.addEventListener('touchend',()=>{
   sel.w=Math.round(sel.w);
   sel.h=Math.round(sel.h);
 
-  applyAutoZoom(); // ←ここでだけ発動
+  handleAutoZoom();
  }
-
  touch.mode='';
  update();
 });
