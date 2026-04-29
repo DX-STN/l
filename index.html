@@ -150,6 +150,14 @@ mCont.addEventListener('touchmove',e=>{
     if (curH > mr.height) nextY = Math.min(0, Math.max(nextY, mr.height - curH)); else nextY = (mr.height - curH) / 2;
     view.x = nextX; view.y = nextY;
   }
+
+
+
+
+
+
+
+   
  } else if(touch.mode==='edit' && !isLocked){ // ロック中は枠変形禁止
   let dx=(t[0].pageX-touch.lastX)/view.scale, dy=(t[0].pageY-touch.lastY)/view.scale;
   if(touch.edge==='n'){ sel.y+=dy; sel.h-=dy; }
