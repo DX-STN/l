@@ -97,6 +97,10 @@ fileInput.onchange = e=>{
  r.readAsDataURL(f[0]);
 };
 
+
+
+ 
+/*
 mCont.addEventListener('touchstart',e=>{
  if(!img.isLoaded)return;
  const t=e.touches;
@@ -131,6 +135,55 @@ mCont.addEventListener('touchstart',e=>{
      longPressTimer = null;
    }, 1000);
  }
+*/
+
+
+
+
+ mCont.addEventListener('touchstart',e=>{
+ if(!img.isLoaded)return;
+ const t=e.touches;
+ mCont.classList.add('dragging');
+
+ if(t.length === 1) {
+   touch.startX = t.pageX; touch.startY = t.pageY;
+
+   // 触れたものがハンドル、または枠、または枠のインジケーター（反応領域）
+   const isHandle = e.target.classList.contains('handle');
+   const isBox = (e.target === cropBox || cropBox.contains(e.target));
+
+   if(isHandle || isBox) {
+     setIndicatorsDisplay('block');
+     // wasEditingは「移動・変形が始まったか」の判定に使うため、ここではまだfalseのまま
+     wasEditing = false; 
+   }
+
+   longPressTimer = setTimeout(() => {
+     const mr = mCont.getBoundingClientRect();
+     const bitmapX = (touch.startX - mr.left - view.x) / view.scale;
+     const bitmapY = (touch.startY - mr.top - view.y) / view.scale;
+     
+     // 判定用マージン（反応領域分 50px）
+     const margin = 50 / view.scale;
+     const inBox = (bitmapX >= sel.x - margin && bitmapX <= sel.x + sel.w + margin &&
+                    bitmapY >= sel.y - margin && bitmapY <= sel.y + sel.h + margin);
+
+     // 指がまだ動いていない（wasEditingがfalse）かつ、枠内or反応領域ならロック切り替え
+     if(inBox && !wasEditing) {
+       isLocked = !isLocked;
+       update();
+     } else if(!inBox) {
+       executeWarp(touch.startX, touch.startY);
+     }
+     longPressTimer = null;
+   }, 1000);
+ }
+ // ...以下、ズーム・スクロール・エディットのモード設定は変更なし
+
+
+ 
+
+ 
 
  if(t.length===2){
   cancelLongPress();
