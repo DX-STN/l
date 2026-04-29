@@ -57,7 +57,7 @@ let longPressTimer = null;
 btnToggle.onclick = () => { isAutoZoom = !isAutoZoom; update(); };
 
 fileInput.onchange = e=>{
- const f=e.target.files; if(!f)return;
+ const f=e.target.files[0]; if(!f)return;
  const r=new FileReader();
  r.onload=ev=>{
   navImg.src=mainImg.src=ev.target.result;
