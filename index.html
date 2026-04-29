@@ -127,12 +127,22 @@ mCont.addEventListener('touchmove',e=>{
   if (curH > mr.height) nextY = Math.min(0, Math.max(nextY, mr.height - curH)); else nextY = (mr.height - curH) / 2;
   view.x = nextX; view.y = nextY; view.scale = newScale;
  } else if(touch.mode==='scroll'){
+
+
+   
+
+   
   const dx = t[0].pageX - touch.lastX, dy = t[0].pageY - touch.lastY;
   if(isLocked){ // 第2段階：ロック中のスクロール（画像移動）
     sel.x -= dx / view.scale; sel.y -= dy / view.scale;
     // 画像範囲外に出ないようクランプ
     sel.x = Math.max(0, Math.min(sel.x, img.w - sel.w));
     sel.y = Math.max(0, Math.min(sel.y, img.h - sel.h));
+
+
+
+
+    
   } else {
     let nextX = view.x + dx, nextY = view.y + dy;
     const curW = img.w * view.scale, curH = img.h * view.scale;
