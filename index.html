@@ -434,7 +434,7 @@ function handleAutoZoom(){
 
 
 
-
+/*
 const navImg = document.getElementById('nav-img'), mainImg = document.getElementById('main-img'), navBox = document.getElementById('nav-box'), cropBox = document.getElementById('crop-box'), mCont = document.getElementById('main-container'), nCont = document.getElementById('nav-container'), fileInput = document.getElementById('file-input'), btnToggle = document.getElementById('toggle-az'), statsDiv = document.getElementById('stats');
 
 let img={w:0,h:0,isLoaded:false}, view={x:0,y:0,scale:1}, sel={x:0,y:0,w:0,h:0};
@@ -645,6 +645,210 @@ function handleAutoZoom(){
  view.y = (mr.height / 2) - (sel.y + sel.h / 2) * tS;
  view.scale = tS;
 }
+*/
+
+
+
+
+
+// --- 要素取得と変数管理は維持 ---
+const navImg = document.getElementById('nav-img'), mainImg = document.getElementById('main-img'), navBox = document.getElementById('nav-box'), cropBox = document.getElementById('crop-box'), mCont = document.getElementById('main-container'), nCont = document.getElementById('nav-container'), fileInput = document.getElementById('file-input'), btnToggle = document.getElementById('toggle-az'), statsDiv = document.getElementById('stats');
+
+let img={w:0,h:0,isLoaded:false}, view={x:0,y:0,scale:1}, sel={x:0,y:0,w:0,h:0};
+let touch={mode:'',lastX:0,lastY:0,lastDist:0,lastScale:1,edge:'',startX:0,startY:0};
+let isAutoZoom = true, isLocked = false, wasMoved = false;
+let longPressTimer = null;
+
+// ★【新規】ロック時の「画面上の枠位置」を保持する変数
+let lockedBox = { L: 0, T: 0, W: 0, H: 0 };
+
+btnToggle.onclick = () => { isAutoZoom = !isAutoZoom; update(); };
+
+fileInput.onchange = e=>{
+ // 注意：添え字[0]を忘れないこと！
+ const f=e.target.files[0]; if(!f)return;
+ const r=new FileReader();
+ r.onload=ev=>{
+  navImg.src=mainImg.src=ev.target.result;
+  mainImg.onload=()=>{
+   img.w=mainImg.naturalWidth; img.h=mainImg.naturalHeight; img.isLoaded=true;
+   sel={x:0,y:0,w:img.w,h:img.h};
+   const mr = mCont.getBoundingClientRect();
+   view.scale = Math.min(mr.width/img.w, mr.height/img.h);
+   view.x = (mr.width - img.w*view.scale)/2;
+   view.y = (mr.height - img.h*view.scale)/2;
+   mainImg.style.display=navImg.style.display=cropBox.style.display=navBox.style.display='block';
+   update();
+  };
+ };
+ r.readAsDataURL(f);
+};
+
+mCont.addEventListener('touchstart',e=>{
+ if(!img.isLoaded)return;
+ const t=e.touches; mCont.classList.add('dragging');
+ if(t.length===1){
+  touch.mode = e.target.classList.contains('handle') ? 'edit' : 'scroll';
+  if(touch.mode==='edit') touch.edge=e.target.dataset.edge;
+  touch.lastX=t.pageX; touch.lastY=t.pageY;
+  touch.startX = t.pageX; touch.startY = t.pageY;
+  wasMoved = false;
+  if(e.target.classList.contains('handle')) setIndicatorsDisplay('block');
+  
+  longPressTimer = setTimeout(() => {
+    if(wasMoved) return;
+    const mr = mCont.getBoundingClientRect();
+    const bx = (touch.startX - mr.left - view.x) / view.scale, by = (touch.startY - mr.top - view.y) / view.scale;
+    const margin = 50 / view.scale;
+    const inBox = (bx >= sel.x - margin && bx <= sel.x + sel.w + margin && by >= sel.y - margin && by <= sel.y + sel.h + margin);
+    if(inBox) { 
+      isLocked = !isLocked; 
+      if(isLocked) {
+        // ★ロックした瞬間の「画面上の位置」を記憶する
+        lockedBox.L = view.x + sel.x * view.scale;
+        lockedBox.T = view.y + sel.y * view.scale;
+        lockedBox.W = sel.w * view.scale;
+        lockedBox.H = sel.h * view.scale;
+      }
+      setIndicatorsDisplay('none'); update(); 
+    }
+    else if(!isLocked) executeWarp(touch.startX, touch.startY);
+    longPressTimer = null;
+  }, 1000);
+ } else if(t.length===2){
+  cancelLongPress(); touch.mode='zoom';
+  touch.lastDist = Math.hypot(t[0].pageX - t[1].pageX, t[0].pageY - t[1].pageY);
+  touch.lastScale = view.scale;
+ }
+},{passive:false});
+
+mCont.addEventListener('touchmove',e=>{
+ if(!touch.mode)return; e.preventDefault();
+ const t=e.touches; const mr = mCont.getBoundingClientRect();
+ if(longPressTimer) {
+   const dist = Math.hypot(t[0].pageX - touch.startX, t[0].pageY - touch.startY);
+   if(dist > 10) { cancelLongPress(); setIndicatorsDisplay('none'); wasMoved = true; }
+ }
+ if(touch.mode==='zoom' && t.length===2){
+  const dist = Math.hypot(t[0].pageX - t[1].pageX, t[0].pageY - t[1].pageY);
+  let nScale = touch.lastScale * (dist / touch.lastDist);
+  const minS = Math.min(mr.width / img.w, mr.height / img.h);
+  if(nScale < minS) nScale = minS;
+
+  if(isLocked){
+    // ★ロック中：画像倍率だけを変える（枠の画面位置は変えない）
+    view.scale = nScale;
+    // 枠の左上が指し示す「画像内のピクセル座標」を更新する
+    sel.x = (lockedBox.L - view.x) / view.scale;
+    sel.y = (lockedBox.T - view.y) / view.scale;
+    // ※sel.w, sel.h は lockedBox.W/H から逆算（窓のサイズを画像上で拡大縮小）
+    sel.w = lockedBox.W / view.scale;
+    sel.h = lockedBox.H / view.scale;
+  } else {
+    const cx = mr.width/2, cy = mr.height/2;
+    view.x = cx - (cx - view.x) * (nScale / view.scale);
+    view.y = cy - (cy - view.y) * (nScale / view.scale);
+    view.scale = nScale;
+  }
+ } else if(touch.mode==='scroll'){
+  const dx = t[0].pageX - touch.lastX, dy = t[0].pageY - touch.lastY;
+  if(isLocked){
+    // ★ロック中：画像を表示位置(view)ごと動かす。枠(lockedBox)は動かさない。
+    view.x += dx; view.y += dy;
+    // 画像内のどこを切り抜いているか(sel)を逆算して同期
+    sel.x = (lockedBox.L - view.x) / view.scale;
+    sel.y = (lockedBox.T - view.y) / view.scale;
+  } else {
+    view.x += dx; view.y += dy;
+  }
+  touch.lastX=t[0].pageX; touch.lastY=t[0].pageY;
+ } else if(touch.mode==='edit' && !isLocked){
+  let dx=(t[0].pageX-touch.lastX)/view.scale, dy=(t[0].pageY-touch.lastY)/view.scale;
+  if(touch.edge==='n'){ sel.y+=dy; sel.h-=dy; }
+  if(touch.edge==='s'){ sel.h+=dy; }
+  if(touch.edge==='e'){ sel.w+=dx; }
+  if(touch.edge==='w'){ sel.x+=dx; sel.w-=dx; }
+  touch.lastX=t[0].pageX; touch.lastY=t[0].pageY;
+ }
+ update();
+},{passive:false});
+
+mCont.addEventListener('touchend',()=>{
+ cancelLongPress(); mCont.classList.remove('dragging'); setIndicatorsDisplay('none');
+ if(touch.mode==='edit' || isLocked){
+  sel.x=Math.round(sel.x); sel.y=Math.round(sel.y); sel.w=Math.round(sel.w); sel.h=Math.round(sel.h);
+  if(!isLocked) handleAutoZoom();
+ }
+ touch.mode=''; update();
+});
+
+function setIndicatorsDisplay(val) {
+  document.querySelectorAll('.handle-indicator').forEach(i => {
+    i.style.display = val;
+    if(isLocked) i.classList.add('locked-highlight'); else i.classList.remove('locked-highlight');
+  });
+}
+function cancelLongPress() { if(longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; } }
+function executeWarp(sx, sy) {
+  const mr = mCont.getBoundingClientRect();
+  const bx = (sx - mr.left - view.x) / view.scale, by = (sy - mr.top - view.y) / view.scale;
+  sel.x = Math.round(Math.max(0, Math.min(bx - sel.w/2, img.w - sel.w)));
+  sel.y = Math.round(Math.max(0, Math.min(by - sel.h/2, img.h - sel.h)));
+  handleAutoZoom(); update();
+}
+
+function update() {
+  if (!img.isLoaded) return;
+  const mr = mCont.getBoundingClientRect();
+  statsDiv.innerText = `倍率: ${view.scale.toFixed(2)} / 1px: ${view.scale.toFixed(1)}px / LOCK: ${isLocked ? 'ON' : 'OFF'}`;
+  if(isLocked) cropBox.classList.add('locked'); else cropBox.classList.remove('locked');
+  
+  mainImg.style.transform = `translate(${view.x}px,${view.y}px) scale(${view.scale})`;
+
+  // ★【重要】表示位置の決定
+  let L, T, W, H;
+  if(isLocked) {
+    // ロック中は記憶した「画面上の絶対位置」をそのまま使う（計算しない）
+    L = lockedBox.L; T = lockedBox.T; W = lockedBox.W; H = lockedBox.H;
+  } else {
+    // 通常時は画像位置とselから計算する
+    L = view.x + sel.x * view.scale; T = view.y + sel.y * view.scale;
+    W = sel.w * view.scale; H = sel.h * view.scale;
+  }
+
+  cropBox.style.left = L+'px'; cropBox.style.top = T+'px'; cropBox.style.width = W+'px'; cropBox.style.height = H+'px';
+  
+  const pad = 50, dPW = Math.min(pad, W), dPH = Math.min(pad, H), isHL = W > H;
+  ['n', 's', 'e', 'w'].forEach(edge => {
+    const o = document.getElementById(`h${edge}_o`), i = document.getElementById(`h${edge}_i`), io = document.getElementById(`ind_${edge}_o`), ii = document.getElementById(`ind_${edge}_i`), b = (edge === 'n' ? T : (edge === 's' ? T + H : (edge === 'w' ? L : L + W)));
+    if (edge === 'n' || edge === 's') {
+      o.style.width = W + 'px'; o.style.left = L + 'px'; o.style.top = (edge === 'n' ? b - pad : b) + 'px'; o.style.height = pad + 'px';
+      i.style.width = W + 'px'; i.style.left = L + 'px'; i.style.top = (edge === 'n' ? b : b - dPH) + 'px'; i.style.height = dPH + 'px';
+      io.style.width = '100%'; io.style.left = '0'; io.style.height = pad + 'px'; io.style.top = (edge === 'n' ? -pad : H) + 'px';
+      ii.style.width = '100%'; ii.style.left = '0'; ii.style.height = dPH + 'px'; ii.style.top = (edge === 'n' ? 0 : H - dPH) + 'px';
+    } else {
+      o.style.height = H + 'px'; o.style.top = T + 'px'; o.style.left = (edge === 'w' ? b - pad : b) + 'px'; o.style.width = pad + 'px';
+      i.style.height = H + 'px'; i.style.top = T + 'px'; i.style.left = (edge === 'w' ? b : b - dPW) + 'px'; i.style.width = dPW + 'px';
+      io.style.height = '100%'; io.style.top = '0'; io.style.width = pad + 'px'; io.style.left = (edge === 'w' ? -pad : W) + 'px';
+      ii.style.height = '100%'; ii.style.top = '0'; ii.style.width = dPW + 'px'; ii.style.left = (edge === 'w' ? 0 : W - dPW) + 'px';
+    }
+    o.style.zIndex = 20; const isS = isHL ? (edge === 'e' || edge === 'w') : (edge === 'n' || edge === 's'); i.style.zIndex = isS ? 10 : 5;
+  });
+  const nr = nCont.getBoundingClientRect(), ns = Math.min(nr.width / img.w, nr.height / img.h), nx = (nr.width - img.w * ns) / 2, ny = (nr.height - img.h * ns) / 2;
+  navImg.style.transform = `translate(${nx}px,${ny}px) scale(${ns})`;
+  navBox.style.left = (nx + sel.x * ns) + 'px'; navBox.style.top = (ny + sel.y * ns) + 'px'; navBox.style.width = (sel.w * ns) + 'px'; navBox.style.height = (sel.h * ns) + 'px';
+}
+
+function handleAutoZoom(){
+ if(!isAutoZoom || isLocked) return;
+ const mr = mCont.getBoundingClientRect();
+ let tS = Math.min(Math.max(Math.min(mr.width / sel.w, mr.height / sel.h), Math.min(mr.width / img.w, mr.height / img.h)), 40);
+ view.x = (mr.width / 2) - (sel.x + sel.w / 2) * tS;
+ view.y = (mr.height / 2) - (sel.y + sel.h / 2) * tS;
+ view.scale = tS;
+}
+
+  
 
 
 
