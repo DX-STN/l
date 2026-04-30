@@ -180,6 +180,8 @@ mCont.addEventListener('touchmove',e=>{
  update();
 },{passive:false});
 
+  
+/*
 mCont.addEventListener('touchend',()=>{
  cancelLongPress(); mCont.classList.remove('dragging'); setIndicatorsDisplay('none');
  if(pendingToast) { showToast(pendingToast); pendingToast = null; }
@@ -191,6 +193,48 @@ mCont.addEventListener('touchend',()=>{
  }
  touch.mode=''; update();
 });
+*/
+
+
+mCont.addEventListener('touchend',()=>{
+ cancelLongPress(); mCont.classList.remove('dragging'); setIndicatorsDisplay('none');
+ if(pendingToast) { showToast(pendingToast); pendingToast = null; }
+
+ if(touch.mode==='edit' || isLocked){
+  if(isLocked){
+    // ★【ロック時のピクセルフィット】枠に画像を吸着させる
+    // 1. 枠の幅(lockedBox.W)の中に、現在の画像ピクセル(sel.w)が何倍ならピッタリ入るか再計算
+    // これにより「中途半端な倍率」を「ピクセルが枠に合う倍率」に微調整する
+    const fitScaleW = lockedBox.W / Math.round(sel.w);
+    const fitScaleH = lockedBox.H / Math.round(sel.h);
+    
+    // 縦横比を崩さないよう、より近い方の倍率を採用（または用途に合わせて選択）
+    view.scale = (Math.abs(view.scale - fitScaleW) < Math.abs(view.scale - fitScaleH)) ? fitScaleW : fitScaleH;
+    
+    // 倍率の上限40pxも維持
+    if(view.scale > 40) view.scale = 40;
+
+    // 2. データ上の座標を整数(ピクセル)に丸める
+    sel.x = Math.round(sel.x);
+    sel.y = Math.round(sel.y);
+    sel.w = Math.round(sel.w);
+    sel.h = Math.round(sel.h);
+
+    // 3. 画像の表示位置(view.x/y)を、枠の画面位置(lockedBox)とピクセル境界が重なるように補正
+    view.x = lockedBox.L - sel.x * view.scale;
+    view.y = lockedBox.T - sel.y * view.scale;
+
+  } else {
+    // 通常モードのフィット
+    sel.x=Math.round(sel.x); sel.y=Math.round(sel.y); sel.w=Math.round(sel.w); sel.h=Math.round(sel.h);
+    handleAutoZoom();
+  }
+ }
+ touch.mode=''; update();
+});
+
+
+  
 
 function setPendingToast(msg) { pendingToast = msg; }
 
