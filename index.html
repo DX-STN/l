@@ -195,7 +195,7 @@ mCont.addEventListener('touchend',()=>{
 });
 */
 
-
+/*
 mCont.addEventListener('touchend',()=>{
  cancelLongPress(); mCont.classList.remove('dragging'); setIndicatorsDisplay('none');
  if(pendingToast) { showToast(pendingToast); pendingToast = null; }
@@ -226,6 +226,53 @@ mCont.addEventListener('touchend',()=>{
 
   } else {
     // 通常モードのフィット
+    sel.x=Math.round(sel.x); sel.y=Math.round(sel.y); sel.w=Math.round(sel.w); sel.h=Math.round(sel.h);
+    handleAutoZoom();
+  }
+ }
+ touch.mode=''; update();
+});
+*/
+
+
+  
+mCont.addEventListener('touchend',()=>{
+ cancelLongPress(); mCont.classList.remove('dragging'); setIndicatorsDisplay('none');
+ if(pendingToast) { showToast(pendingToast); pendingToast = null; }
+
+ if(touch.mode==='edit' || isLocked){
+  if(isLocked){
+    // ★【ロック時の厳格フィット】
+    // 1. 現在の枠の中に「何ピクセル入れたいか」の概数を出す
+    let targetPixelW = Math.round(sel.w);
+    let targetPixelH = Math.round(sel.h);
+
+    // 2. そのピクセル数を入れた時の倍率を計算
+    let fitScale = lockedBox.W / targetPixelW;
+
+    // 3. ★【重要】最大サイズ(40px)を超える場合の処理
+    // もし40倍を超えてしまうなら、中に入れるピクセル数を「1つ増やす」ことで、
+    // 1ピクセルあたりのサイズを小さくし、40px以下に収まるように強制する
+    if (fitScale > 40) {
+      targetPixelW = Math.ceil(lockedBox.W / 40); // 40pxに収まる最小の整数ピクセル数
+      fitScale = lockedBox.W / targetPixelW;
+    }
+
+    // 4. 計算された厳格な倍率を適用
+    view.scale = fitScale;
+
+    // 5. データ座標を丸める（targetPixelWと一致させる）
+    sel.w = targetPixelW;
+    sel.h = Math.round(lockedBox.H / view.scale);
+    sel.x = Math.round(sel.x);
+    sel.y = Math.round(sel.y);
+
+    // 6. 画像の表示位置を「窓」にピタッと合わせる
+    view.x = lockedBox.L - sel.x * view.scale;
+    view.y = lockedBox.T - sel.y * view.scale;
+
+  } else {
+    // 通常モード
     sel.x=Math.round(sel.x); sel.y=Math.round(sel.y); sel.w=Math.round(sel.w); sel.h=Math.round(sel.h);
     handleAutoZoom();
   }
