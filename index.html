@@ -176,6 +176,9 @@ mCont.addEventListener('touchmove',e=>{
  update();
 },{passive:false});
 
+
+  
+/*
 mCont.addEventListener('touchend',()=>{
  cancelLongPress(); mCont.classList.remove('dragging'); setIndicatorsDisplay('none');
  if(pendingToast) { showToast(pendingToast); pendingToast = null; }
@@ -195,7 +198,63 @@ mCont.addEventListener('touchend',()=>{
  }
  touch.mode=''; update();
 });
+*/
 
+
+
+mCont.addEventListener('touchend',()=>{
+ cancelLongPress(); mCont.classList.remove('dragging'); setIndicatorsDisplay('none');
+ if(pendingToast) { showToast(pendingToast); pendingToast = null; }
+
+ if(touch.mode==='edit' || isLocked){
+  if(isLocked){
+    // --- 厳格な3段階フィットアルゴリズム ---
+    if(view.scale > 40) view.scale = 40;
+    
+    // 【Step 1 & 2】現在の倍率において、元の枠サイズに最も近い「整数ピクセル数」を特定
+    let targetW = Math.round(originalLockedBox.W / view.scale);
+    let targetH = Math.round(originalLockedBox.H / view.scale);
+    if(targetW < 1) targetW = 1; if(targetH < 1) targetH = 1;
+
+    // 【Step 2】倍率を「オリジナルサイズ ÷ ターゲットピクセル数」に微調整
+    // これにより、元の枠サイズを維持したままピクセルがカチッと収まる倍率を探す
+    let idealScaleW = originalLockedBox.W / targetW;
+    let idealScaleH = originalLockedBox.H / targetH;
+
+    // 40px上限を再度確認
+    if(idealScaleW > 40) idealScaleW = 40;
+    if(idealScaleH > 40) idealScaleH = 40;
+
+    // 基本は横幅(W)の基準を優先して倍率を決定（ここがStep 2の肝）
+    view.scale = idealScaleW;
+
+    // 【Step 1】位置の吸着
+    sel.x = Math.round(sel.x);
+    sel.y = Math.round(sel.y);
+    sel.w = targetW;
+    sel.h = Math.round(originalLockedBox.H / view.scale); // 一旦計算上のピクセル数
+
+    // 画像位置を枠の左上に固定
+    view.x = lockedBox.L - sel.x * view.scale;
+    view.y = lockedBox.T - sel.y * view.scale;
+
+    // 【Step 3】比率の都合でどうしても余る「縦方向」などの差分を、枠側の変形で吸収
+    // lockedBox（表示用）を、現在の倍率×ピクセル数で上書きして4辺を完全に合わせる
+    lockedBox.W = sel.w * view.scale; 
+    lockedBox.H = sel.h * view.scale;
+
+  } else {
+    sel.x=Math.round(sel.x); sel.y=Math.round(sel.y); sel.w=Math.round(sel.w); sel.h=Math.round(sel.h);
+    handleAutoZoom();
+  }
+ }
+ touch.mode=''; update();
+});
+
+
+
+
+  
 function setPendingToast(msg) { pendingToast = msg; }
 function showToast(msg) {
   toast.innerText = msg; toast.style.display = 'block';
