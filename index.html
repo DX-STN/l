@@ -477,7 +477,7 @@ function handleAutoZoom(){
 
 
 
-
+/*
 const navImg = document.getElementById('nav-img'), mainImg = document.getElementById('main-img'), navBox = document.getElementById('nav-box'), cropBox = document.getElementById('crop-box'), mCont = document.getElementById('main-container'), nCont = document.getElementById('nav-container'), fileInput = document.getElementById('file-input'), btnToggle = document.getElementById('toggle-az'), statsDiv = document.getElementById('stats');
 
 let img={w:0,h:0,isLoaded:false}, view={x:0,y:0,scale:1}, sel={x:0,y:0,w:0,h:0};
@@ -667,6 +667,213 @@ function update() {
     o.style.zIndex = 20; 
     const isS = isHL ? (edge === 'e' || edge === 'w') : (edge === 'n' || edge === 's'); 
     i.style.zIndex = isS ? 10 : 5;
+  });
+  const nr = nCont.getBoundingClientRect(), ns = Math.min(nr.width / img.w, nr.height / img.h), nx = (nr.width - img.w * ns) / 2, ny = (nr.height - img.h * ns) / 2;
+  navImg.style.transform = `translate(${nx}px,${ny}px) scale(${ns})`;
+  navBox.style.left = (nx + sel.x * ns) + 'px'; navBox.style.top = (ny + sel.y * ns) + 'px'; navBox.style.width = (sel.w * ns) + 'px'; navBox.style.height = (sel.h * ns) + 'px';
+}
+
+function handleAutoZoom(){
+ if(!isAutoZoom || isLocked) return;
+ const mr = mCont.getBoundingClientRect();
+ let tS = Math.min(Math.max(Math.min(mr.width / sel.w, mr.height / sel.h), Math.min(mr.width / img.w, mr.height / img.h)), 40);
+ view.x = (mr.width / 2) - (sel.x + sel.w / 2) * tS;
+ view.y = (mr.height / 2) - (sel.y + sel.h / 2) * tS;
+ view.scale = tS;
+}
+*/
+
+
+
+
+
+const navImg = document.getElementById('nav-img'), mainImg = document.getElementById('main-img'), navBox = document.getElementById('nav-box'), cropBox = document.getElementById('crop-box'), mCont = document.getElementById('main-container'), nCont = document.getElementById('nav-container'), fileInput = document.getElementById('file-input'), btnToggle = document.getElementById('toggle-az'), statsDiv = document.getElementById('stats');
+
+let img={w:0,h:0,isLoaded:false}, view={x:0,y:0,scale:1}, sel={x:0,y:0,w:0,h:0};
+let touch={mode:'',lastX:0,lastY:0,lastDist:0,lastScale:1,edge:'',startX:0,startY:0, pivotX:0, pivotY:0};
+let isAutoZoom = true, isLocked = false, wasMoved = false;
+let longPressTimer = null;
+let lockedBox = { L: 0, T: 0, W: 0, H: 0 };
+
+btnToggle.onclick = () => { isAutoZoom = !isAutoZoom; update(); };
+
+fileInput.onchange = e=>{
+ const f=e.target.files[0]; if(!f)return; // 注意：[0]を忘れない
+ const r=new FileReader();
+ r.onload=ev=>{
+  navImg.src=mainImg.src=ev.target.result;
+  mainImg.onload=()=>{
+   img.w=mainImg.naturalWidth; img.h=mainImg.naturalHeight; img.isLoaded=true;
+   sel={x:0,y:0,w:img.w,h:img.h};
+   const mr = mCont.getBoundingClientRect();
+   view.scale = Math.min(mr.width/img.w, mr.height/img.h);
+   view.x = (mr.width - img.w*view.scale)/2;
+   view.y = (mr.height - img.h*view.scale)/2;
+   mainImg.style.display=navImg.style.display=cropBox.style.display=navBox.style.display='block';
+   update();
+  };
+ };
+ r.readAsDataURL(f);
+};
+
+mCont.addEventListener('touchstart',e=>{
+ if(!img.isLoaded)return;
+ const t=e.touches; mCont.classList.add('dragging');
+ if(t.length===1){
+  touch.mode = e.target.classList.contains('handle') ? 'edit' : 'scroll';
+  if(touch.mode==='edit') touch.edge=e.target.dataset.edge;
+  touch.lastX=t[0].pageX; touch.lastY=t[0].pageY;
+  touch.startX = t[0].pageX; touch.startY = t[0].pageY;
+  wasMoved = false;
+  if(e.target.classList.contains('handle')) setIndicatorsDisplay('block');
+  
+  longPressTimer = setTimeout(() => {
+    if(wasMoved) return;
+    const mr = mCont.getBoundingClientRect();
+    const bx = (touch.startX - mr.left - view.x) / view.scale, by = (touch.startY - mr.top - view.y) / view.scale;
+    const margin = 50 / view.scale;
+    const inBox = (bx >= sel.x - margin && bx <= sel.x + sel.w + margin && by >= sel.y - margin && by <= sel.y + sel.h + margin);
+    if(inBox) { 
+      isLocked = !isLocked; 
+      if(isLocked) {
+        lockedBox.L = view.x + sel.x * view.scale; lockedBox.T = view.y + sel.y * view.scale;
+        lockedBox.W = sel.w * view.scale; lockedBox.H = sel.h * view.scale;
+      }
+      setIndicatorsDisplay('none'); update(); 
+    }
+    else if(!isLocked) executeWarp(touch.startX, touch.startY);
+    longPressTimer = null;
+  }, 1000);
+ } else if(t.length===2){
+  cancelLongPress(); touch.mode='zoom';
+  const mr = mCont.getBoundingClientRect();
+  touch.lastDist = Math.hypot(t[0].pageX - t[1].pageX, t[0].pageY - t[1].pageY);
+  touch.lastScale = view.scale;
+  touch.pivotX = (t[0].pageX + t[1].pageX) / 2 - mr.left;
+  touch.pivotY = (t[0].pageY + t[1].pageY) / 2 - mr.top;
+ }
+},{passive:false});
+
+mCont.addEventListener('touchmove',e=>{
+ if(!touch.mode)return; e.preventDefault();
+ const t=e.touches; const mr = mCont.getBoundingClientRect();
+ if(longPressTimer) {
+   const dist = Math.hypot(t[0].pageX - touch.startX, t[0].pageY - touch.startY);
+   if(dist > 10) { cancelLongPress(); setIndicatorsDisplay('none'); wasMoved = true; }
+ }
+ 
+ if(touch.mode==='zoom' && t.length===2){
+  const dist = Math.hypot(t[0].pageX - t[1].pageX, t[0].pageY - t[1].pageY);
+  let nScale = touch.lastScale * (dist / touch.lastDist);
+  const minS = Math.min(mr.width / img.w, mr.height / img.h);
+  if(nScale < minS) nScale = minS;
+
+  const scaleRatio = nScale / view.scale;
+  let nX = touch.pivotX - (touch.pivotX - view.x) * scaleRatio;
+  let nY = touch.pivotY - (touch.pivotY - view.y) * scaleRatio;
+
+  // 画像クランプ
+  const cW = img.w * nScale, cH = img.h * nScale;
+  if (cW > mr.width) nX = Math.min(0, Math.max(nX, mr.width - cW)); else nX = (mr.width - cW) / 2;
+  if (cH > mr.height) nY = Math.min(0, Math.max(nY, mr.height - cH)); else nY = (mr.height - cH) / 2;
+
+  view.x = nX; view.y = nY; view.scale = nScale;
+
+  if(isLocked){
+    // ★枠はみ出し防止：画像内の座標(sel)を画像サイズで厳格に縛る
+    sel.x = Math.max(0, Math.min((lockedBox.L - view.x) / view.scale, img.w - (lockedBox.W / view.scale)));
+    sel.y = Math.max(0, Math.min((lockedBox.T - view.y) / view.scale, img.h - (lockedBox.H / view.scale)));
+    sel.w = lockedBox.W / view.scale;
+    sel.h = lockedBox.H / view.scale;
+  }
+ } else if(touch.mode==='scroll'){
+  const dx = t[0].pageX - touch.lastX, dy = t[0].pageY - touch.lastY;
+  let nX = view.x + dx, nY = view.y + dy;
+  const cW = img.w * view.scale, cH = img.h * view.scale;
+  if (cW > mr.width) nX = Math.min(0, Math.max(nX, mr.width - cW)); else nX = (mr.width - cW) / 2;
+  if (cH > mr.height) nY = Math.min(0, Math.max(nY, mr.height - cH)); else nY = (mr.height - cH) / 2;
+  view.x = nX; view.y = nY;
+
+  if(isLocked){
+    // ★枠はみ出し防止：スクロール時もselを画像内に収める
+    sel.x = Math.max(0, Math.min((lockedBox.L - view.x) / view.scale, img.w - sel.w));
+    sel.y = Math.max(0, Math.min((lockedBox.T - view.y) / view.scale, img.h - sel.h));
+  }
+  touch.lastX=t[0].pageX; touch.lastY=t[0].pageY;
+ } else if(touch.mode==='edit' && !isLocked){
+  let dx=(t[0].pageX-touch.lastX)/view.scale, dy=(t[0].pageY-touch.lastY)/view.scale;
+  if(touch.edge==='n'){ sel.y+=dy; sel.h-=dy; }
+  if(touch.edge==='s'){ sel.h+=dy; }
+  if(touch.edge==='e'){ sel.w+=dx; }
+  if(touch.edge==='w'){ sel.x+=dx; sel.w-=dx; }
+  // エディット時も画像外は禁止
+  sel.x=Math.max(0,Math.min(sel.x,img.w-sel.w)); sel.y=Math.max(0,Math.min(sel.y,img.h-sel.h));
+  sel.w=Math.max(1,Math.min(sel.w,img.w-sel.x)); sel.h=Math.max(1,Math.min(sel.h,img.h-sel.y));
+  touch.lastX=t[0].pageX; touch.lastY=t[0].pageY;
+ }
+ update();
+},{passive:false});
+
+mCont.addEventListener('touchend',()=>{
+ cancelLongPress(); mCont.classList.remove('dragging'); setIndicatorsDisplay('none');
+ if(touch.mode==='edit' || isLocked){
+  const oX = sel.x, oY = sel.y;
+  sel.x=Math.round(sel.x); sel.y=Math.round(sel.y); sel.w=Math.round(sel.w); sel.h=Math.round(sel.h);
+  if(isLocked){ view.x += (oX - sel.x) * view.scale; view.y += (oY - sel.y) * view.scale; }
+  else { handleAutoZoom(); }
+ }
+ touch.mode=''; update();
+});
+
+function setIndicatorsDisplay(val) {
+  document.querySelectorAll('.handle-indicator').forEach(i => {
+    i.style.display = val;
+    if(isLocked) i.classList.add('locked-highlight'); else i.classList.remove('locked-highlight');
+  });
+}
+function cancelLongPress() { if(longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; } }
+function executeWarp(sx, sy) {
+  const mr = mCont.getBoundingClientRect();
+  const bx = (sx - mr.left - view.x) / view.scale, by = (sy - mr.top - view.y) / view.scale;
+  sel.x = Math.round(Math.max(0, Math.min(bx - sel.w/2, img.w - sel.w)));
+  sel.y = Math.round(Math.max(0, Math.min(by - sel.h/2, img.h - sel.h)));
+  handleAutoZoom(); update();
+}
+
+function update() {
+  if (!img.isLoaded) return;
+  const mr = mCont.getBoundingClientRect();
+  statsDiv.innerText = `倍率: ${view.scale.toFixed(2)} / 1px: ${view.scale.toFixed(1)}px / LOCK: ${isLocked ? 'ON' : 'OFF'}`;
+  btnToggle.innerText = `オートズーム: ${isAutoZoom ? 'ON' : 'OFF'}`;
+  btnToggle.style.background = isAutoZoom ? '#4da3ff' : '#666';
+  if(isLocked) cropBox.classList.add('locked'); else cropBox.classList.remove('locked');
+  
+  mainImg.style.transform = `translate(${view.x}px,${view.y}px) scale(${view.scale})`;
+
+  let L, T, W, H;
+  if(isLocked) {
+    L = lockedBox.L; T = lockedBox.T; W = lockedBox.W; H = lockedBox.H;
+  } else {
+    L = view.x + sel.x * view.scale; T = view.y + sel.y * view.scale;
+    W = sel.w * view.scale; H = sel.h * view.scale;
+  }
+  cropBox.style.left = L+'px'; cropBox.style.top = T+'px'; cropBox.style.width = W+'px'; cropBox.style.height = H+'px';
+  
+  const pad = 50, dPW = Math.min(pad, W), dPH = Math.min(pad, H), isHL = W > H;
+  ['n', 's', 'e', 'w'].forEach(edge => {
+    const o = document.getElementById(`h${edge}_o`), i = document.getElementById(`h${edge}_i`), io = document.getElementById(`ind_${edge}_o`), ii = document.getElementById(`ind_${edge}_i`), b = (edge === 'n' ? T : (edge === 's' ? T + H : (edge === 'w' ? L : L + W)));
+    if (edge === 'n' || edge === 's') {
+      o.style.width = W + 'px'; o.style.left = L + 'px'; o.style.top = (edge === 'n' ? b - pad : b) + 'px'; o.style.height = pad + 'px';
+      i.style.width = W + 'px'; i.style.left = L + 'px'; i.style.top = (edge === 'n' ? b : b - dPH) + 'px'; i.style.height = dPH + 'px';
+      io.style.width = '100%'; io.style.left = '0'; io.style.height = pad + 'px'; io.style.top = (edge === 'n' ? -pad : H) + 'px';
+      ii.style.width = '100%'; ii.style.left = '0'; ii.style.height = dPH + 'px'; ii.style.top = (edge === 'n' ? 0 : H - dPH) + 'px';
+    } else {
+      o.style.height = H + 'px'; o.style.top = T + 'px'; o.style.left = (edge === 'w' ? b - pad : b) + 'px'; o.style.width = pad + 'px';
+      i.style.height = H + 'px'; i.style.top = T + 'px'; i.style.left = (edge === 'w' ? b : b - dPW) + 'px'; i.style.width = dPW + 'px';
+      io.style.height = '100%'; io.style.top = '0'; io.style.width = pad + 'px'; io.style.left = (edge === 'w' ? -pad : W) + 'px';
+      ii.style.height = '100%'; ii.style.top = '0'; ii.style.width = dPW + 'px'; ii.style.left = (edge === 'w' ? 0 : W - dPW) + 'px';
+    }
+    o.style.zIndex = 20; const isS = isHL ? (edge === 'e' || edge === 'w') : (edge === 'n' || edge === 's'); i.style.zIndex = isS ? 10 : 5;
   });
   const nr = nCont.getBoundingClientRect(), ns = Math.min(nr.width / img.w, nr.height / img.h), nx = (nr.width - img.w * ns) / 2, ny = (nr.height - img.h * ns) / 2;
   navImg.style.transform = `translate(${nx}px,${ny}px) scale(${ns})`;
